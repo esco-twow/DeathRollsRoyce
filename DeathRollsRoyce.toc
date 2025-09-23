@@ -1,0 +1,7 @@
+## Interface: 11200
+## Title: |cFF651FFFDeathRollsRoyce
+## Author: Esco
+## Notes: Death Roll
+## Version: 0.1
+## SavedVariables: DeathRollsRoyceOptions
+DeathRollsRoyce.xml
