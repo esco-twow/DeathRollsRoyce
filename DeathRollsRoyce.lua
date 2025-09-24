@@ -1,15 +1,19 @@
 DeathRollsRoyceOptions = {}
 
+--------------------------------------------------------------------------------------------------
+-- Defines
+--------------------------------------------------------------------------------------------------
+
 local OUTPUT_HEADER = "|cFF673AB7DRR|r "
 
+-- Addon ID for SendAddonMessage
 local ADDON_ID = "DEATHROLLS"
 
+-- Options
 local OPTION_DEBUG = "Debug"
 local OPTION_ENABLED = "Enabled"
 
-local DeathRollsRoyceStatus = {}
-local DeathRollsRoyceRollFrame = nil
-
+-- Status
 local STATUS_AMOUNT = "Amount"
 local STATUS_PLAYER_STARTED = "PlayerStarted"
 local STATUS_PLAYERS = "Players"
@@ -20,6 +24,7 @@ local STATUS_ROUND = "Round"
 local STATUS_RUNNING = "Running"
 local STATUS_WINNER = "Winner"
 
+-- Commands
 local COMMAND_START = "start"
 local COMMAND_RUNNING = "running"
 local COMMAND_JOIN = "join"
@@ -28,16 +33,26 @@ local COMMAND_LOSER = "loser"
 local COMMAND_STOP = "stop"
 local COMMAND_CLEAR = "clear"
 
+-- Colors
 local RESET_COLOR_TEXT = "|r"
 local GREEN_TEXT = "|cFF55A630"
 local RED_TEXT = "|cFFEF233C"
 
+-- Frame
 local BUTTON_WIDTH = 32
 local BUTTON_COUNT = 4
 local BUTTON_PADING = 5
 local FONT_NAME = "Fonts\\FRIZQT__.TTF"
 local FONT_SIZE = 12
 local FONT_OUTLINE = "OUTLINE"
+
+--------------------------------------------------------------------------------------------------
+-- State management variables
+--------------------------------------------------------------------------------------------------
+
+local DeathRollsRoyceInitialized = false
+local DeathRollsRoyceStatus = {}
+local DeathRollsRoyceRollFrame = nil
 
 --------------------------------------------------------------------------------------------------
 -- Helper functions
@@ -225,6 +240,10 @@ local function CreateRollFrame()
     return frame
 end
 
+--------------------------------------------------------------------------------------------------
+-- Command helper functions
+--------------------------------------------------------------------------------------------------
+
 function DeathRollsRoyce_Start(amount)
     if (DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] ~= nil) then
         PrintMessage("There is already a death roll running, started by: " .. DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] .. ". Finish that one before starting another. If something has gone wrong, to clear current death roll status: /dr clear")
@@ -271,12 +290,12 @@ function DeathRollsRoyce_Leave()
 end
 
 function DeathRollsRoyce_Clear()
-    DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] = nil
-    PrintMessage("Cleared death roll status.")
-    DeathRollsRoyceFrame:UnregisterEvent("CHAT_MSG_SYSTEM")
+    DeathRollsRoyceStatus = {}
 
     DeathRollsRoyceRollFrame.text_area:SetText("")
     DeathRollsRoyceRollFrame:Hide()
+
+    PrintMessage("Cleared death roll status.")
 end
 
 function DeathRollsRoyce_Roll()
@@ -337,7 +356,6 @@ function DeathRollsRoyce_UpdatePlayers()
     text = text .. "Started by: " .. DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] .. "\n\n"
     text = text .. "Players:\n"
 
-    -- Determine lowest roll
     local total_players = 0
     local total_losers = 0
     local rolls_completed = 0
@@ -371,10 +389,14 @@ function DeathRollsRoyce_UpdatePlayers()
         end
     end
 
+    -- If all players for the round have rolled and there is only 1 player left (total losers is equal to player count minus one), we need to determine the winner
+    -- Note: Sanity check that we are in at least round 1 because start/clear goes to round 0 and round is incremented each time a round starts
     if ((DeathRollsRoyceStatus[STATUS_ROUND] > 0) and (total_losers == (total_players - 1))) then
         -- Determine winner
         for _, player in pairs(DeathRollsRoyceStatus[STATUS_PLAYERS]) do
+            -- If this player isn't in the losers table, they are the winner
             if (TableContains(DeathRollsRoyceStatus[STATUS_PLAYERS_LOSERS], player) == false) then
+                -- Sanity check that there shouldn't already be a winner defined
                 if (winner == nil) then
                     winner = player
                 else
@@ -385,42 +407,52 @@ function DeathRollsRoyce_UpdatePlayers()
         end
     end
 
+    -- Winner error? Something wen't wrong, we can't define a winner
     if winner_error then
         winner = nil
     end
 
+    -- Main loop to update player status text
     for _, player in pairs(DeathRollsRoyceStatus[STATUS_PLAYERS]) do
+        -- Round is running, determine text color and roll number output
         if (DeathRollsRoyceStatus[STATUS_RUNNING] == 1) then
-
             local text_color = ""
-
-            -- Get roll text color
             local text_roll = ""
+
+            -- If the player has rolled, determine text output
             if (DeathRollsRoyceStatus[STATUS_ROLLS][player] ~= nil) then
-                -- All rolls completed? Get roll text color
+                -- All rolls for the round complete? Determine the roll text color for losers and winners of the round
                 if (rolls_completed == total_players) then
+                    -- Loser of the round?
                     if (player == lowest_roll_player) then
                         text_color = RED_TEXT
+
                     else
                         text_color = GREEN_TEXT
                     end
                 end
+
+                -- Append roll to output
                 text_roll = ": " .. DeathRollsRoyceStatus[STATUS_ROLLS][player]
             end
 
+            -- If the player lost a previous round, their text color output is red
             if TableContains(DeathRollsRoyceStatus[STATUS_PLAYERS_LOSERS], player) then
                 text_color = RED_TEXT
             end
 
+            -- Winner of all rounds?
             if (player == winner) then
                 text_color = GREEN_TEXT
             end
 
             text = text .. text_color .. player .. text_roll .. RESET_COLOR_TEXT .. "\n"
 
+        -- No round is running, but player is in the losers list - mark them red
         elseif TableContains(DeathRollsRoyceStatus[STATUS_PLAYERS_LOSERS], player) then
             text = text .. RED_TEXT .. player .. RESET_COLOR_TEXT .. "\n"
 
+        -- No round running and player isn't in the losers list - just output normal text for player name
         else
             text = text .. player .. "\n"
         end
@@ -435,11 +467,13 @@ function DeathRollsRoyce_UpdatePlayers()
         -- All rolls completed for round?
         if ((DeathRollsRoyceStatus[STATUS_RUNNING] == 1) and (rolls_completed == total_players) and (Player == DeathRollsRoyceStatus[STATUS_PLAYER_STARTED])) then
             PrintDebug("All rolls completed, sending lowest roll player " .. lowest_roll_player)
+            -- Send loser of round
             SendAddonMessage(ADDON_ID, COMMAND_LOSER .. ":" .. Player .. ":" .. lowest_roll_player .. ":" .. lowest_roll .. ":" .. highest_roll_player .. ":" .. highest_roll, "RAID")
 
-        -- All rolls completed for all rounds?
+        -- All rolls completed for all rounds, and no winner sent yet?
         elseif ((winner ~= nil) and (DeathRollsRoyceStatus[STATUS_WINNER] == nil)) then
             PrintDebug("All rounds completed, sending stop")
+            -- Send winner
             SendAddonMessage(ADDON_ID, COMMAND_STOP .. ":" .. Player .. ":" .. winner, "RAID")
         end
     end
@@ -454,14 +488,11 @@ function DeathRollsRoyce_OnLoad()
 	this:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     SlashCmdList["DeathRollsRoyce"] = DeathRollsRoyce_Command
-    SLASH_DeathRollsRoyce1 = "/drr"
-    SLASH_DeathRollsRoyce2 = "/dr"
-    SLASH_DeathRollsRoyce3 = "/deathroll"
+    SLASH_DeathRollsRoyce1 = "/dr"
+    SLASH_DeathRollsRoyce2 = "/deathroll"
 end
 
 function DeathRollsRoyce_OnEvent(event)
-    -- PrintDebug("DeathRollsRoyce_OnEvent " .. event)
-
 	if (event == "PLAYER_ENTERING_WORLD") then
 		DeathRollsRoyce_Initialize()
     elseif (event == "CHAT_MSG_ADDON") then
@@ -505,7 +536,7 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
         DeathRollsRoyceStatus[STATUS_ROLLS] = {}
         DeathRollsRoyceStatus[STATUS_RUNNING] = 0
         DeathRollsRoyceStatus[STATUS_ROUND] = 0
-        DeathRollsRoyceStatus[STATUS_WINNER] = nill
+        DeathRollsRoyceStatus[STATUS_WINNER] = nil
 
         table.insert(DeathRollsRoyceStatus[STATUS_PLAYERS], user_data_split[2])
 
@@ -575,6 +606,7 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
 end
 
 function DeathRollsRoyce_HandleSystemMessage(message)
+    -- Not running? Nothing to do
     if (DeathRollsRoyceStatus[STATUS_RUNNING] ~= 1) then
         do return end
     end
@@ -584,16 +616,19 @@ function DeathRollsRoyce_HandleSystemMessage(message)
     if (string.find(message, "rolls") and string.find(message, "(%d+)")) then
         local _, _, roller, roll, min_roll, max_roll = string.find(message, "(%S+) rolls (%d+) %((%d+)%-(%d+)%)")
 
+        -- Sanity check for correct roll
         if ((tonumber(min_roll) ~= 1) or (tonumber(max_roll) ~= (DeathRollsRoyceStatus[STATUS_AMOUNT] * 10))) then
             PrintDebug("Ignoring random non-deathroll from: " .. roller)
             do return end
         end
 
+        -- Ignore rolls from players who lost a previous round
         if (TableContains(DeathRollsRoyceStatus[STATUS_PLAYERS_LOSERS], roller)) then
             PrintDebug("Ignoring roll from loser: " .. roller)
             do return end
         end
 
+        -- If the person who rolled joined the death roll, and they don't already already have a roll for this round? Register roll
         if (TableContains(DeathRollsRoyceStatus[STATUS_PLAYERS], roller) and (DeathRollsRoyceStatus[STATUS_ROLLS][roller] == nil)) then
             PrintDebug("Registering roll of " .. roll .. " for " .. roller)
             DeathRollsRoyceStatus[STATUS_ROLLS][roller] = tonumber(roll)
@@ -608,6 +643,12 @@ end
 --------------------------------------------------------------------------------------------------
 
 function DeathRollsRoyce_Initialize()
+    if (DeathRollsRoyceInitialized == true) then
+        do return end
+    end
+
+    DeathRollsRoyceInitialized = true
+
     PrintDebug("DeathRollsRoyce_Initialize")
 	Player = UnitName("player")
 	Realm = GetRealmName()
@@ -646,6 +687,7 @@ function DeathRollsRoyce_Command(args)
     if (args == "") then
         PrintMessage("Death Rolls Royce: " .. GetOptionBoolText(OPTION_ENABLED))
         PrintMessage(" - Change with /dr [on | off]")
+        PrintMessage("To start a death roll, /dr start <amount>")
 
     elseif (args == "on") then
         EnableOption(OPTION_ENABLED)
