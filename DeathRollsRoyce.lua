@@ -17,6 +17,7 @@ local OPTION_ENABLED = "Enabled"
 local STATUS_AMOUNT = "Amount"
 local STATUS_PLAYER_STARTED = "PlayerStarted"
 local STATUS_PLAYERS = "Players"
+local STATUS_PLAYER_COUNT = "PlayerCount"
 local STATUS_PLAYERS_LOSERS = "PlayersLosers"
 local STATUS_ROLLS = "Rolls"
 local STATUS_ROLLED = "Rolled"
@@ -353,8 +354,10 @@ end
 
 function DeathRollsRoyce_UpdatePlayers()
     local text = "Rolling for: " .. DeathRollsRoyceStatus[STATUS_AMOUNT] .. " gold\n"
+    text = text .. "Current pot split: " .. (DeathRollsRoyceStatus[STATUS_AMOUNT] / DeathRollsRoyceStatus[STATUS_PLAYER_COUNT]) .. "\n"
     text = text .. "Started by: " .. DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] .. "\n\n"
-    text = text .. "Players:\n"
+
+    text = text .. "Players: (" .. DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] .. ")\n"
 
     local total_players = 0
     local total_losers = 0
@@ -474,7 +477,8 @@ function DeathRollsRoyce_UpdatePlayers()
         elseif ((winner ~= nil) and (DeathRollsRoyceStatus[STATUS_WINNER] == nil)) then
             PrintDebug("All rounds completed, sending stop")
             -- Send winner
-            SendAddonMessage(ADDON_ID, COMMAND_STOP .. ":" .. Player .. ":" .. winner, "RAID")
+            pot_split = DeathRollsRoyceStatus[STATUS_AMOUNT] / DeathRollsRoyceStatus[STATUS_PLAYER_COUNT]
+            SendAddonMessage(ADDON_ID, COMMAND_STOP .. ":" .. Player .. ":" .. winner .. ":" .. pot_split, "RAID")
         end
     end
 
@@ -532,6 +536,7 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
         DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] = user_data_split[2]
         DeathRollsRoyceStatus[STATUS_AMOUNT] = tonumber(user_data_split[3])
         DeathRollsRoyceStatus[STATUS_PLAYERS] = {}
+        DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] = 1
         DeathRollsRoyceStatus[STATUS_PLAYERS_LOSERS] = {}
         DeathRollsRoyceStatus[STATUS_ROLLS] = {}
         DeathRollsRoyceStatus[STATUS_RUNNING] = 0
@@ -550,6 +555,7 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
     elseif (user_data_split[1] == COMMAND_JOIN) then
         if (user_data_split[2] ~= nil) and (TableContains(DeathRollsRoyceStatus[STATUS_PLAYERS], user_data_split[2]) == false) then
             table.insert(DeathRollsRoyceStatus[STATUS_PLAYERS], user_data_split[2])
+            DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] = DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] + 1
             PrintMessage(user_data_split[2] .. " joined the death roll.")
             DeathRollsRoyce_UpdatePlayers()
         end
@@ -562,6 +568,7 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
             local table_index = GetTableIndex(DeathRollsRoyceStatus[STATUS_PLAYERS], user_data_split[2])
             if (table_index ~= nil) then
                 table.remove(DeathRollsRoyceStatus[STATUS_PLAYERS], table_index)
+                DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] = DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] - 1
                 PrintMessage(user_data_split[2] .. " left the death roll.")
                 DeathRollsRoyce_UpdatePlayers()
             end
@@ -590,8 +597,9 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
 
         if (Player == user_data_split[3]) then
             PrintMessage("Mama mia! You won the death roll - Let's gooooooooooooooooooo")
+            PrintMessage("Each player will pay you " .. user_data_split[4] .. " gold")
         else
-            PrintMessage("Death roll over. The winner is: " .. DeathRollsRoyceStatus[STATUS_WINNER] .. ".")
+            PrintMessage("Death roll over. The winner is: " .. DeathRollsRoyceStatus[STATUS_WINNER] .. ". You need to pay " .. user_data_split[4] .. " gold to that player.")
         end
 
         -- Round completed, clear rolls and reset running state
