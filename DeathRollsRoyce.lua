@@ -1,3 +1,6 @@
+-- TODO
+-- Implement get status button to request status of any current death rolls
+-- 
 DeathRollsRoyceOptions = {}
 
 --------------------------------------------------------------------------------------------------
@@ -5,6 +8,7 @@ DeathRollsRoyceOptions = {}
 --------------------------------------------------------------------------------------------------
 
 local OUTPUT_HEADER = "|cFF673AB7DRR|r "
+local MAX_AMOUNT = 1000
 
 -- Addon ID for SendAddonMessage
 local ADDON_ID = "DEATHROLLS"
@@ -248,6 +252,8 @@ end
 function DeathRollsRoyce_Start(amount)
     if (DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] ~= nil) then
         PrintMessage("There is already a death roll running, started by: " .. DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] .. ". Finish that one before starting another. If something has gone wrong, to clear current death roll status: /dr clear")
+    elseif (amount > MAX_AMOUNT) then
+        PrintMessage("The max death roll amount is " .. MAX_AMOUNT)
     else
         PrintMessage("You started a death roll for " .. amount .. " gold.")
         SendAddonMessage(ADDON_ID, COMMAND_START .. ":" .. Player .. ":" .. amount, "RAID")
@@ -553,6 +559,10 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
         DeathRollsRoyce_UpdatePlayers()
 
     elseif (user_data_split[1] == COMMAND_JOIN) then
+        -- Sanity check - don't allow players to join who might have enabled the addon after the death roll rounds were already started
+        if ((DeathRollsRoyceStatus[STATUS_ROUND] > 0) or (DeathRollsRoyceStatus[STATUS_RUNNING] ~= 0)) then
+            do return end
+        end
         if (user_data_split[2] ~= nil) and (TableContains(DeathRollsRoyceStatus[STATUS_PLAYERS], user_data_split[2]) == false) then
             table.insert(DeathRollsRoyceStatus[STATUS_PLAYERS], user_data_split[2])
             DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] = DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] + 1
