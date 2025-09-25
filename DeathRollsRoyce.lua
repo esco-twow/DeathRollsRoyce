@@ -1,6 +1,6 @@
 -- TODO
 -- Implement get status button to request status of any current death rolls
--- 
+-- Possible new idea - for mode: everyone who joins rolls, single round only, and then lowest roll pays the highest roll
 DeathRollsRoyceOptions = {}
 
 --------------------------------------------------------------------------------------------------
