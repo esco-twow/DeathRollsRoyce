@@ -1,6 +1,8 @@
 -- TODO
 -- Implement get status button to request status of any current death rolls
 -- Possible new idea - for mode: everyone who joins rolls, single round only, and then lowest roll pays the highest roll
+-- Allow changing amount after start (done - needs to be tested)
+
 DeathRollsRoyceOptions = {}
 
 --------------------------------------------------------------------------------------------------
@@ -31,6 +33,7 @@ local STATUS_WINNER = "Winner"
 
 -- Commands
 local COMMAND_START = "start"
+local COMMAND_AMOUNT = "amount"
 local COMMAND_RUNNING = "running"
 local COMMAND_JOIN = "join"
 local COMMAND_LEAVE = "leave"
@@ -260,6 +263,17 @@ function DeathRollsRoyce_Start(amount)
     end
 end
 
+function DeathRollsRoyce_Amount(amount)
+    if ((DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] ~= nil) or (DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] ~= Player)) then
+        PrintMessage("There is already a death roll running, started by: " .. DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] .. ". Finish that one before starting another. If something has gone wrong, to clear current death roll status: /dr clear")
+    elseif (amount > MAX_AMOUNT) then
+        PrintMessage("The max death roll amount is " .. MAX_AMOUNT)
+    else
+        PrintMessage("You changed the death roll amount to " .. amount .. " gold.")
+        SendAddonMessage(ADDON_ID, COMMAND_AMOUNT .. ":" .. Player .. ":" .. amount, "RAID")
+    end
+end
+
 function DeathRollsRoyce_Join()
     if (IsEnabled() == false) then
         PrintMessage("Please enable the addon first, /dr on")
@@ -362,7 +376,6 @@ function DeathRollsRoyce_UpdatePlayers()
     local text = "Rolling for: " .. DeathRollsRoyceStatus[STATUS_AMOUNT] .. " gold\n"
     text = text .. "Current pot split: " .. (DeathRollsRoyceStatus[STATUS_AMOUNT] / DeathRollsRoyceStatus[STATUS_PLAYER_COUNT]) .. "\n"
     text = text .. "Started by: " .. DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] .. "\n\n"
-
     text = text .. "Players: (" .. DeathRollsRoyceStatus[STATUS_PLAYER_COUNT] .. ")\n"
 
     local total_players = 0
@@ -557,6 +570,13 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
 
         DeathRollsRoyceRollFrame:Show()
         DeathRollsRoyce_UpdatePlayers()
+    
+    elseif ((user_data_split[1] == COMMAND_AMOUNT) and message_from_player_started) then
+        DeathRollsRoyceStatus[STATUS_AMOUNT] = tonumber(user_data_split[3])
+
+        PrintMessage(DeathRollsRoyceStatus[STATUS_PLAYER_STARTED] .. " changed the death roll amount to " .. DeathRollsRoyceStatus[STATUS_AMOUNT] .. " gold")
+
+        DeathRollsRoyce_UpdatePlayers()
 
     elseif (user_data_split[1] == COMMAND_JOIN) then
         -- Sanity check - don't allow players to join who might have enabled the addon after the death roll rounds were already started
@@ -618,7 +638,8 @@ function DeathRollsRoyce_HandleAddonMessage(addon_id, user_data)
         DeathRollsRoyceStatus[STATUS_RUNNING] = 0
         DeathRollsRoyceStatus[STATUS_ROLLED] = 0
 
-        DeathRollsRoyce_UpdatePlayers()
+        -- TODO: Since we cleared all these variables, we can't call update players - if we do, we get nil errors - should be fine but review and make sure
+        -- DeathRollsRoyce_UpdatePlayers()
 
     end
 end
@@ -737,6 +758,15 @@ function DeathRollsRoyce_Command(args)
             PrintMessage("Please enter an amount for the death roll, " .. args_split[2] .. " is not a number.")
         else
             DeathRollsRoyce_Start(tonumber(args_split[2]))
+        end
+
+    elseif (args == COMMAND_AMOUNT) then
+        PrintMessage("Please enter an amount to change the death roll to, e.g. /dr amount 100")
+    elseif (args_split[1] == COMMAND_AMOUNT) then
+        if (tonumber(args_split[2]) == nil) then
+            PrintMessage("Please enter an amount to change the death roll to, " .. args_split[2] .. " is not a number.")
+        else
+            DeathRollsRoyce_Amount(tonumber(args_split[2]))
         end
 
     elseif (args == COMMAND_JOIN) then
